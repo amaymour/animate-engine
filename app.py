@@ -122,11 +122,11 @@ async def download(run_id: str):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     dl = gh(["run", "download", str(run_db_id), "--repo", GITHUB_REPO,
-             "--dir", str(out_dir), "--name", f"animation-{run_db_id}", "--clobber"])
+             "--dir", str(out_dir), "--name", f"animation-{run_db_id}"])
     if dl.returncode != 0:
         # Try generic download (artifact name may differ slightly)
         dl = gh(["run", "download", str(run_db_id), "--repo", GITHUB_REPO,
-                 "--dir", str(out_dir), "--clobber"])
+                 "--dir", str(out_dir)])
         if dl.returncode != 0:
             return JSONResponse({"ok": False, "error": dl.stderr.strip()}, status_code=500)
 

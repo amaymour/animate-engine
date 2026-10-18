@@ -16,7 +16,7 @@ DOWNLOADS = BASE / "static" / "downloads"
 DOWNLOADS.mkdir(parents=True, exist_ok=True)
 
 # Change this to your repo if different.
-GITHUB_REPO = os.environ.get("GITHUB_REPO", "rakesh2626260-ctrl/animate-engine")
+GITHUB_REPO = os.environ.get("GITHUB_REPO", "amaymour/animate-engine")
 WORKFLOW = "render.yml"
 
 app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")

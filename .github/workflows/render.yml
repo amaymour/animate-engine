@@ -50,10 +50,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install system deps (ffmpeg)
+      - name: Install system deps (ffmpeg + Manim cairo/pango)
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg libcairo2-dev libpango1.0-dev libffi-dev libgirepository1.0-dev
 
       - name: Install Manim
         run: |

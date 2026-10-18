@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Animate Engine — 2D YouTube Animator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.5; }
+  .container { max-width: 720px; margin: 40px auto; padding: 0 20px; }
+  header { margin-bottom: 32px; }
+  h1 { font-size: 1.75rem; letter-spacing: -0.5px; margin-bottom: 8px; }
+  p.sub { color: #94a3b8; font-size: 0.95rem; }
+
+  card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 24px; margin-bottom: 24px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); }
+  h2 { font-size: 1.1rem; margin-bottom: 16px; color: #f8fafc; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+
+  label { display: block; font-size: 0.875rem; color: #cbd5e1; margin-bottom: 6px; font-weight: 600; }
+  input, select, textarea { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: #f8fafc; font-size: 1rem; margin-bottom: 14px; }
+  input:focus, select:focus { outline: none; border-color: #38bdf8; }
+
+  button.generate { width: 100%; padding: 14px; border-radius: 10px; border: none; background: #3b82f6; color: #fff; font-size: 1.05rem; font-weight: 700; cursor: pointer; margin-top: 8px; }
+  button.generate:disabled { opacity: 0.55; cursor: not-allowed; }
+  button.generate:hover:not(:disabled) { background: #2563eb; }
+
+  #status { margin-top: 16px; padding: 14px; border-radius: 10px; background: #0f172a; border: 1px solid #334155; font-size: 0.95rem; color: #94a3b8; display: none; }
+  #status.show { display: block; }
+  #status.ok { border-color: #22c55e; color: #86efac; }
+  #status.err { border-color: #ef4444; color: #fca5a5; }
+
+  .video-box { margin-top: 24px; border-radius: 12px; overflow: hidden; border: 1px solid #334155; background: #000; display: none; }
+  .video-box.show { display: block; }
+  video { width: 100%; height: auto; background: #000; }
+
+  .muted { color: #64748b; font-size: 0.85rem; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>Animate Engine</h1>
+    <p class="sub">Type a topic &rarr; GitHub Actions renders a high-quality 2D animation &rarr; you download the MP4.</p>
+  </div>
+
+  <card>
+    <h2>Create animation</h2>
+    <div class="grid">
+      <div>
+        <label>Topic / text</label>
+        <input id="topic" type="text" value="Explain quantum computing" placeholder="e.g. How black holes work">
+        <div class="muted">Appears as on-screen text / title.</div>
+      </div>
+      <div>
+        <label>Style</label>
+        <select id="anim_type">
+          <option value="motion_graphics">Motion graphics (shapes)</option>
+          <option value="stick_figure">Stick figure</option>
+          <option value="whiteboard">Whiteboard explainer</option>
+          <option value="kinetic_typography">Kinetic typography</option>
+          <option value="puppet">Cutout puppet</option>
+          <option value="infographic">Animated infographic</option>
+          <option value="background_loop">Background loop</option>
+          <option value="vertical_shorts">Vertical Shorts</option>
+        </select>
+      </div>
+      <div>
+        <label>Hold duration (seconds)</label>
+        <input id="duration" type="number" value="8" min="2" max="30">
+      </div>
+      <div>
+        <label>Quality</label>
+        <select id="quality">
+          <option value="high">High (1080p)</option>
+          <option value="draft">Draft (fast)</option>
+        </select>
+      </div>
+      <div>
+        <label>Orientation</label>
+        <select id="orientation">
+          <option value="landscape">Landscape (1920x1080)</option>
+          <option value="vertical">Vertical / Shorts (1080x1920)</option>
+        </select>
+      </div>
+    </div>
+    <button class="generate" id="btn" onclick="generate()">Generate & Render on GitHub</button>
+  </card>
+
+  <div id="status">Preparing&hellip;</div>
+  <div class="video-box" id="videoBox">
+    <video id="video" controls playsinline poster=""></video>
+  </div>
+</div>
+
+<script>
+  const btn = document.getElementById("btn");
+  const status = document.getElementById("status");
+  const videoBox = document.getElementById("videoBox");
+  const video = document.getElementById("video");
+
+  async function generate() {
+    const form = new FormData();
+    form.append("topic", document.getElementById("topic").value);
+    form.append("anim_type", document.getElementById("anim_type").value);
+    form.append("duration", document.getElementById("duration").value);
+    form.append("quality", document.getElementById("quality").value);
+    form.append("orientation", document.getElementById("orientation").value);
+
+    btn.disabled = true;
+    btn.textContent = "Dispatching to GitHub Actions&hellip;";
+    status.className = "";
+    status.textContent = "Sending job to GitHub runners&hellip;";
+    status.style.display = "block";
+    videoBox.style.display = "none";
+
+    try {
+      const r = await fetch("/generate", { method: "POST", body: form });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || "dispatch failed");
+      status.className = "ok";
+      status.textContent = "Job dispatched. GitHub is rendering now (this can take a few minutes). Polling status&hellip;";
+      poll(j.run_id);
+    } catch (e) {
+      status.className = "err";
+      status.textContent = "Error: " + e.message;
+      btn.disabled = false;
+      btn.textContent = "Generate & Render on GitHub";
+    }
+  }
+
+  async function poll(runId) {
+    for (let i = 0; i < 60; i++) { // up to ~5 minutes
+      await new Promise(r => setTimeout(r, 5000));
+      const r = await fetch(`/status/${runId}`);
+      const j = await r.json();
+      if (!j.ok) { status.textContent = "Status error: " + (j.error||""); continue; }
+      status.textContent = `Status: ${j.status} ${j.conclusion ? "-" + j.conclusion : ""}&hellip;`;
+      if (j.status === "completed" && j.conclusion === "success") {
+        status.className = "ok";
+        status.textContent = "Render complete! Preparing download&hellip;";
+        showVideo(j.run_id || runId);
+        return;
+      }
+      if (j.status === "completed" && j.conclusion !== "success") {
+        status.className = "err";
+        status.textContent = "Render failed. Check the GitHub Actions tab.";
+        btn.disabled = false;
+        btn.textContent = "Generate & Render on GitHub";
+        return;
+      }
+    }
+    status.textContent = "Still rendering. Check the GitHub Actions tab or refresh this page.";
+    btn.disabled = false;
+    btn.textContent = "Generate & Render on GitHub";
+  }
+
+  async function showVideo(runId) {
+    const r = await fetch(`/download/${runId}`);
+    if (r.ok) {
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      video.src = url;
+      videoBox.style.display = "block";
+      status.textContent = "Download ready below.";
+    } else {
+      const j = await r.json();
+      status.className = "err";
+      status.textContent = "Download not ready yet: " + (j.error||"");
+    }
+    btn.disabled = false;
+    btn.textContent = "Generate & Render on GitHub";
+  }
+</script>
+</body>
+</html>

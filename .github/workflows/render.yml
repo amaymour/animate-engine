@@ -1,0 +1,103 @@
+name: Render 2D Animation
+
+on:
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: "Animation topic / text"
+        required: true
+        default: "Hello World"
+      anim_type:
+        description: "Animation style"
+        required: true
+        default: "motion_graphics"
+        options:
+          - stick_figure
+          - whiteboard
+          - kinetic_typography
+          - motion_graphics
+          - puppet
+          - infographic
+          - background_loop
+          - vertical_shorts
+      duration:
+        description: "Seconds to hold at end"
+        required: true
+        default: "8"
+      quality:
+        description: "Render quality"
+        required: true
+        default: "high"
+        options:
+          - draft
+          - high
+      orientation:
+        description: "Canvas orientation"
+        required: true
+        default: "landscape"
+        options:
+          - landscape
+          - vertical
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system deps (ffmpeg)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Manim
+        run: |
+          pip install --upgrade pip
+          pip install manim
+
+      - name: Generate Manim scene script
+        run: |
+          python codegen.py "${{ inputs.topic }}" "${{ inputs.anim_type }}" "${{ inputs.duration }}" "${{ inputs.orientation }}" > scene.py
+          echo "--- scene.py ---"
+          cat scene.py
+
+      - name: Render animation with Manim
+        id: render
+        run: |
+          QUALITY="${{ inputs.quality }}"
+          if [ "$QUALITY" = "high" ]; then MANIM_Q="-qh"; else MANIM_Q="-ql"; fi
+          manim scene.py GeneratedScene $MANIM_Q --format mp4 --media_dir ./media
+          MP4=$(find media -name "*.mp4" | head -1)
+          echo "mp4_path=$MP4" >> $GITHUB_OUTPUT
+          echo "Rendered: $MP4"
+
+      - name: Post-process & normalize with ffmpeg
+        id: post
+        run: |
+          ORIENT="${{ inputs.orientation }}"
+          MP4="${{ steps.render.outputs.mp4_path }}"
+          mkdir -p out
+          if [ "$ORIENT" = "vertical" ]; then
+            ffmpeg -y -i "$MP4" \
+              -vf "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black" \
+              -c:v libx264 -crf 18 -preset slow -pix_fmt yuv420p -movflags +faststart \
+              out/animation.mp4
+          else
+            ffmpeg -y -i "$MP4" \
+              -vf "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black" \
+              -c:v libx264 -crf 18 -preset slow -pix_fmt yuv420p -movflags +faststart \
+              out/animation.mp4
+          fi
+          echo "out_path=$(realpath out/animation.mp4)" >> $GITHUB_OUTPUT
+
+      - name: Upload animation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: animation-${{ github.run_id }}
+          path: out/animation.mp4
+          retention-days: 5
